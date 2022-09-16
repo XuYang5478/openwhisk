@@ -17,7 +17,12 @@
 
 buildscript {
     repositories {
-        jcenter()
+        // jcenter()
+        maven{ url 'http://maven.aliyun.com/repository/central' }
+        maven{ url 'http://maven.aliyun.com/repository/public' }
+        maven{ url 'http://maven.aliyun.com/repository/gradle-plugin'}
+        maven{ url 'http://maven.aliyun.com/repository/jcenter'}
+        maven{ url 'http://maven.aliyun.com/repository/google' }
     }
     dependencies {
         classpath "cz.alenkacz:gradle-scalafmt:${gradle.scalafmt.version}"

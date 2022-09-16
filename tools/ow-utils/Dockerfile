@@ -19,8 +19,11 @@ FROM adoptopenjdk/openjdk8:jdk8u262-b10
 
 ENV DOCKER_VERSION 1.12.0
 ENV KUBECTL_VERSION v1.16.3
-ENV WHISK_CLI_VERSION latest
+ENV WHISK_CLI_VERSION 1.2.0
 ENV WHISKDEPLOY_CLI_VERSION latest
+
+RUN sed -i "s@http://.*archive.ubuntu.com@http://mirrors.tuna.tsinghua.edu.cn@g" /etc/apt/sources.list
+RUN sed -i "s@http://.*security.ubuntu.com@http://mirrors.tuna.tsinghua.edu.cn@g" /etc/apt/sources.list
 
 RUN apt-get update && apt-get install -y \
   git \
@@ -42,6 +45,9 @@ RUN locale-gen en_US.UTF-8
 ENV LANG='en_US.UTF-8' LANGUAGE='en_US:en' LC_ALL='en_US.UTF-8'
 
 # Python packages
+RUN python -m pip install -i https://pypi.tuna.tsinghua.edu.cn/simple --upgrade pip
+RUN pip config set global.index-url https://pypi.tuna.tsinghua.edu.cn/simple
+
 RUN pip install --upgrade pip
 RUN pip install --upgrade setuptools
 RUN pip install cryptography==2.5 && \
@@ -59,7 +65,7 @@ RUN wget --no-verbose https://get.docker.com/builds/Linux/x86_64/docker-${DOCKER
 RUN curl -Lo ./kubectl https://storage.googleapis.com/kubernetes-release/release/${KUBECTL_VERSION}/bin/linux/amd64/kubectl && chmod +x kubectl && mv kubectl /usr/local/bin/kubectl
 
 # Install `wsk` cli in /usr/local/bin
-RUN wget -q https://github.com/apache/openwhisk-cli/releases/download/$WHISK_CLI_VERSION/OpenWhisk_CLI-$WHISK_CLI_VERSION-linux-amd64.tgz && \
+RUN wget -q https://ghproxy.com/https://github.com/apache/openwhisk-cli/releases/download/$WHISK_CLI_VERSION/OpenWhisk_CLI-$WHISK_CLI_VERSION-linux-amd64.tgz && \
   tar xzf OpenWhisk_CLI-$WHISK_CLI_VERSION-linux-amd64.tgz -C /usr/local/bin wsk && \
   rm OpenWhisk_CLI-$WHISK_CLI_VERSION-linux-amd64.tgz
 
