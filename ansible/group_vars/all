@@ -400,7 +400,7 @@ catalog_auth_key: "{{ playbook_dir }}/files/auth.whisk.system"
 #
 catalog_repos:
   openwhisk-catalog:
-    url: https://github.com/apache/openwhisk-catalog.git
+    url: https://ghproxy.com/https://github.com/apache/openwhisk-catalog.git
     # Set the local location as the same level as openwhisk home, but it can be changed.
     location: "{{ openwhisk_home }}/../openwhisk-catalog"
     version: "HEAD"

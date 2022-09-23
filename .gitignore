@@ -4,6 +4,7 @@ whisk.properties
 whisk.conf
 default.props
 /tests/src/test/resources/application.conf
+/tmp/
 
 .ant-targets-build.xml
 /results/
