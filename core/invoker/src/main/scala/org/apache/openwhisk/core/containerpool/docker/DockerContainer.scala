@@ -24,6 +24,7 @@ import akka.actor.ActorSystem
 import akka.stream._
 import akka.stream.scaladsl.Framing.FramingException
 import spray.json._
+
 import scala.concurrent.{ExecutionContext, Future}
 import scala.concurrent.duration._
 import org.apache.openwhisk.common.Logging
@@ -35,6 +36,7 @@ import org.apache.openwhisk.core.entity.size._
 import akka.stream.scaladsl.{Framing, Source}
 import akka.stream.stage._
 import akka.util.ByteString
+import org.apache.openwhisk.core.containerpool.docker.DockerContainer.ActionName
 import spray.json._
 import org.apache.openwhisk.core.containerpool.logging.LogLine
 import org.apache.openwhisk.core.entity.ExecManifest.ImageName
@@ -43,6 +45,7 @@ import org.apache.openwhisk.http.Messages
 object DockerContainer {
 
   private val byteStringSentinel = ByteString(Container.ACTIVATION_LOG_SENTINEL)
+  private var ActionName: String = ""
 
   /**
    * Creates a container running on a docker daemon.
@@ -60,6 +63,7 @@ object DockerContainer {
    */
   def create(transid: TransactionId,
              image: Either[ImageName, ImageName],
+             actionName: String = "",
              registryConfig: Option[RuntimesRegistryConfig] = None,
              memory: ByteSize = 256.MB,
              cpuShares: Int = 0,
@@ -106,6 +110,13 @@ object DockerContainer {
     val registryConfigUrl = registryConfig.map(_.url).getOrElse("")
     val imageToUse = image.merge.resolveImageName(Some(registryConfigUrl))
 
+    ActionName=actionName
+    log.info(this, s"为动作 $actionName 创建容器")
+
+    // TODO：创建实例前拉取镜像
+    /*
+    希望能在这里获取调用函数的函数名，从而得到对应到镜像。
+     */
     val pulled = image match {
       case Left(userProvided) if userProvided.tag.map(_ == "latest").getOrElse(true) =>
         // Iff the image tag is "latest" explicitly (or implicitly because no tag is given at all), failing to pull will
@@ -123,6 +134,8 @@ object DockerContainer {
         // Iff we're not pulling at all (OpenWhisk provided image) we act as if the pull was successful.
         Future.successful(true)
     }
+
+    log.info(this, s"拉取到镜像：${pulled.value}")
 
     for {
       pullSuccessful <- pulled
@@ -152,7 +165,10 @@ object DockerContainer {
           docker.rm(id)
           Future.failed(WhiskContainerStartupError(Messages.resourceProvisionError))
       }
-    } yield new DockerContainer(id, ip, useRunc)
+    } yield {
+      log.info(this, s"创建容器：$id, $ip")
+      new DockerContainer(id, ip, useRunc)
+    }
   }
 }
 
@@ -190,8 +206,9 @@ class DockerContainer(protected val id: ContainerId,
     (if (useRunc) { runc.resume(id) } else { docker.unpause(id) }).flatMap(_ => super.resume())
   }
   override def destroy()(implicit transid: TransactionId): Future[Unit] = {
+    logging.info(this, s"容器将要销毁: $id")
     super.destroy()
-    docker.rm(id)
+    docker.rm(id, ActionName)
   }
 
   /**

@@ -63,6 +63,7 @@ class StandaloneDockerContainerFactory(instance: InvokerInstanceId, parameters: 
 
   override def createContainer(tid: TransactionId,
                                name: String,
+                               actionName: String = "",
                                actionImage: ExecManifest.ImageName,
                                userProvidedImage: Boolean,
                                memory: ByteSize,
@@ -84,7 +85,7 @@ class StandaloneDockerContainerFactory(instance: InvokerInstanceId, parameters: 
         }
       } else Future.successful(true)
 
-    pulled.flatMap(_ => super.createContainer(tid, name, actionImage, userProvidedImage, memory, cpuShares))
+    pulled.flatMap(_ => super.createContainer(tid, name, actionName, actionImage, userProvidedImage, memory, cpuShares))
   }
 
   override def init(): Unit = {

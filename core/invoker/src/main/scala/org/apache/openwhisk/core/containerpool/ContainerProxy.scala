@@ -419,6 +419,7 @@ class ContainerProxy(factory: (TransactionId,
       activeCount -= 1
       val newData = data.withoutResumeRun()
       //if there are items in runbuffer, process them if there is capacity, and stay; otherwise if we have any pending activations, also stay
+      logging.info(this, s"动作${newData.action.name}执行完成，在容器${newData.container.containerId}中")
       if (requestWork(data) || activeCount > 0) {
         stay using newData
       } else {

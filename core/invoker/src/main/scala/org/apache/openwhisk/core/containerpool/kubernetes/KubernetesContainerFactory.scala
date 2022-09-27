@@ -69,6 +69,7 @@ class KubernetesContainerFactory(
 
   override def createContainer(tid: TransactionId,
                                name: String,
+                               actionName: String = "",
                                actionImage: ImageName,
                                userProvidedImage: Boolean,
                                memory: ByteSize,

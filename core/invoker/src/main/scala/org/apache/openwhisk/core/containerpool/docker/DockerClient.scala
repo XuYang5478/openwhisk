@@ -135,6 +135,7 @@ class DockerClient(dockerHost: Option[String] = None,
       }
     }.flatMap { _ =>
       // Iff the semaphore was acquired successfully
+      log.info(this, s"开始启动容器: $image")
       runCmd(
         Seq("run", "-d") ++ args ++ Seq(image),
         config.timeouts.run,
@@ -178,8 +179,12 @@ class DockerClient(dockerHost: Option[String] = None,
   def unpause(id: ContainerId)(implicit transid: TransactionId): Future[Unit] =
     runCmd(Seq("unpause", id.asString), config.timeouts.unpause).map(_ => ())
 
-  def rm(id: ContainerId)(implicit transid: TransactionId): Future[Unit] =
+
+  // TODO: 销毁容器sub
+  def rm(id: ContainerId, actionName: String = "")(implicit transid: TransactionId): Future[Unit] = {
+    log.info(this, s"为调用 $actionName 销毁容器 $id")
     runCmd(Seq("rm", "-f", id.asString), config.timeouts.rm).map(_ => ())
+  }
 
   def ps(filters: Seq[(String, String)] = Seq.empty, all: Boolean = false)(
     implicit transid: TransactionId): Future[Seq[ContainerId]] = {
@@ -195,6 +200,8 @@ class DockerClient(dockerHost: Option[String] = None,
    * to enable constant updates of an image without changing its tag.
    */
   private val pullsInFlight = TrieMap[String, Future[Unit]]()
+
+  //TODO: 拉取镜像sub
   def pull(image: String)(implicit transid: TransactionId): Future[Unit] =
     pullsInFlight.getOrElseUpdate(image, {
       runCmd(Seq("pull", image), config.timeouts.pull).map(_ => ()).andThen { case _ => pullsInFlight.remove(image) }
@@ -218,6 +225,8 @@ class DockerClient(dockerHost: Option[String] = None,
       case Failure(t) => transid.failed(this, start, t.getMessage, ErrorLevel)
     }
   }
+
+  def dump(): Unit = {}
 }
 
 trait DockerApi {
@@ -271,9 +280,10 @@ trait DockerApi {
    * Removes the container with the given id.
    *
    * @param id the id of the container to remove
+   * @param actionName the action or function name of the container to remove
    * @return a Future completing according to the command's exit-code
    */
-  def rm(id: ContainerId)(implicit transid: TransactionId): Future[Unit]
+  def rm(id: ContainerId, actionName: String = "")(implicit transid: TransactionId): Future[Unit]
 
   /**
    * Returns a list of ContainerIds in the system.
@@ -301,6 +311,11 @@ trait DockerApi {
    * @return a Future containing whether the container was killed or not
    */
   def isOomKilled(id: ContainerId)(implicit transid: TransactionId): Future[Boolean]
+
+  /*
+   * Dumping the running status of function into the top layer of the container's image
+   */
+  def dump(): Unit
 }
 
 /** Indicates any error while starting a container that leaves a broken container behind that needs to be removed */

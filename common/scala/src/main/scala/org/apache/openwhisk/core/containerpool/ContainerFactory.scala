@@ -117,11 +117,20 @@ trait ContainerFactory {
     memory: ByteSize,
     cpuShares: Int,
     action: Option[ExecutableWhiskAction])(implicit config: WhiskConfig, logging: Logging): Future[Container] = {
-    createContainer(tid, name, actionImage, userProvidedImage, memory, cpuShares)
+    println(s"name: $name")
+    println(s"image: $actionImage")
+    println(s"调用动作的参数：${action.get.name}") //函数名
+
+    val actionName: String = action match {
+      case Some(a) => a.name.asString
+      case None => ""
+    }
+    createContainer(tid, name, actionName, actionImage, userProvidedImage, memory, cpuShares)
   }
 
   def createContainer(tid: TransactionId,
                       name: String,
+                      actionName: String,
                       actionImage: ExecManifest.ImageName,
                       userProvidedImage: Boolean,
                       memory: ByteSize,

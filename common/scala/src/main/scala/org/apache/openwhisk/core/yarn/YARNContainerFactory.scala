@@ -117,9 +117,11 @@ class YARNContainerFactory(actorSystem: ActorSystem,
       createService()
     }
   }
+
   override def createContainer(
     unusedtid: TransactionId,
     unusedname: String,
+    unsedactionName: String,
     actionImage: ExecManifest.ImageName,
     unuseduserProvidedImage: Boolean,
     unusedmemory: ByteSize,

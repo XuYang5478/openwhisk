@@ -297,6 +297,7 @@ trait WhiskActionsApi extends WhiskCollectionAPI with PostActionActivation with 
         }
         respondWithActivationIdHeader(activation.activationId) {
           if (activation.response.isSuccess) {
+            logging.info(this, s"函数调用完成：${activation.name}, ${activation.activationId}")
             complete(OK, response)
           } else if (activation.response.isApplicationError) {
             // actions that result is ApplicationError status are considered a 'success'
