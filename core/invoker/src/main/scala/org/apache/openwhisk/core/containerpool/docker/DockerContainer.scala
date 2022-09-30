@@ -17,35 +17,31 @@
 
 package org.apache.openwhisk.core.containerpool.docker
 
-import java.time.Instant
-import java.util.concurrent.TimeoutException
-import java.util.concurrent.atomic.AtomicLong
 import akka.actor.ActorSystem
 import akka.stream._
 import akka.stream.scaladsl.Framing.FramingException
-import spray.json._
-
-import scala.concurrent.{ExecutionContext, Future}
-import scala.concurrent.duration._
-import org.apache.openwhisk.common.Logging
-import org.apache.openwhisk.common.TransactionId
-import org.apache.openwhisk.core.containerpool._
-import org.apache.openwhisk.core.entity.ActivationResponse.{ConnectionError, MemoryExhausted}
-import org.apache.openwhisk.core.entity.{ActivationEntityLimit, ByteSize}
-import org.apache.openwhisk.core.entity.size._
 import akka.stream.scaladsl.{Framing, Source}
 import akka.stream.stage._
 import akka.util.ByteString
-import org.apache.openwhisk.core.containerpool.docker.DockerContainer.ActionName
-import spray.json._
+import org.apache.openwhisk.common.{Logging, TransactionId}
+import org.apache.openwhisk.core.containerpool._
 import org.apache.openwhisk.core.containerpool.logging.LogLine
+import org.apache.openwhisk.core.entity.ActivationResponse.{ConnectionError, MemoryExhausted}
 import org.apache.openwhisk.core.entity.ExecManifest.ImageName
+import org.apache.openwhisk.core.entity.size._
+import org.apache.openwhisk.core.entity.{ActivationEntityLimit, ByteSize}
 import org.apache.openwhisk.http.Messages
+import spray.json._
+
+import java.time.Instant
+import java.util.concurrent.TimeoutException
+import java.util.concurrent.atomic.AtomicLong
+import scala.concurrent.duration._
+import scala.concurrent.{ExecutionContext, Future}
 
 object DockerContainer {
 
   private val byteStringSentinel = ByteString(Container.ACTIVATION_LOG_SENTINEL)
-  private var ActionName: String = ""
 
   /**
    * Creates a container running on a docker daemon.
@@ -108,9 +104,10 @@ object DockerContainer {
       params
 
     val registryConfigUrl = registryConfig.map(_.url).getOrElse("")
-    val imageToUse = image.merge.resolveImageName(Some(registryConfigUrl))
+    val imageToUse = docker.chooseImage(image.merge.resolveImageName(Some(registryConfigUrl)), actionName)
 
-    ActionName=actionName
+    log.info(this, s"函数 $actionName 将会使用镜像 $imageToUse")
+
     log.info(this, s"为动作 $actionName 创建容器")
 
     // TODO：创建实例前拉取镜像
@@ -167,7 +164,7 @@ object DockerContainer {
       }
     } yield {
       log.info(this, s"创建容器：$id, $ip")
-      new DockerContainer(id, ip, useRunc)
+      new DockerContainer(id, imageToUse, actionName, ip, useRunc)
     }
   }
 }
@@ -183,6 +180,8 @@ object DockerContainer {
  * @param addr the ip of the container
  */
 class DockerContainer(protected val id: ContainerId,
+                      protected val image: String,
+                      protected val actionName: String,
                       protected[core] val addr: ContainerAddress,
                       protected val useRunc: Boolean)(implicit docker: DockerApiWithFileAccess,
                                                       runc: RuncApi,
@@ -205,10 +204,14 @@ class DockerContainer(protected val id: ContainerId,
   override def resume()(implicit transid: TransactionId): Future[Unit] = {
     (if (useRunc) { runc.resume(id) } else { docker.unpause(id) }).flatMap(_ => super.resume())
   }
+
+  override def commit()(implicit transid: TransactionId): Future[Unit] = {
+    docker.commit(id, image, actionName)
+  }
   override def destroy()(implicit transid: TransactionId): Future[Unit] = {
     logging.info(this, s"容器将要销毁: $id")
     super.destroy()
-    docker.rm(id, ActionName)
+    docker.rm(id, actionName)
   }
 
   /**

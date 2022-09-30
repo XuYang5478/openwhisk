@@ -38,7 +38,7 @@ import scala.concurrent.{ExecutionContext, Future}
  * YARNTask implementation of Container.
  * Differences from DockerContainer include:
  * - does not launch container using docker cli, but rather the YARN framework
- * - does not support pause/resume
+ * - does not support pause/resume/commit
  * - does not support log collection (currently), but does provide a message indicating logs can be viewed via YARN UI
  * (external log collection and retrieval must be enabled via LogStore SPI to expose logs to wsk cli)
  */
@@ -50,7 +50,9 @@ class YARNTask(override protected val id: ContainerId,
                val component_instance_name: String,
                imageName: ImageName,
                yarnConfig: YARNConfig,
-               yarnComponentActor: ActorRef)
+               yarnComponentActor: ActorRef,
+               protected val image: String = "",
+               protected val actionName: String = "")
     extends Container {
 
   val containerRemoveTimeoutMS = 60000
@@ -66,6 +68,8 @@ class YARNTask(override protected val id: ContainerId,
     // resume not supported
     Future.successful(())
   }
+
+  override def commit()(implicit transid: TransactionId): Future[Unit] = Future.successful(())
 
   /** Completely destroys this instance of the container. */
   override def destroy()(implicit transid: TransactionId): Future[Unit] = {
@@ -88,4 +92,6 @@ class YARNTask(override protected val id: ContainerId,
   override def logs(limit: ByteSize, waitForSentinel: Boolean)(
     implicit transid: TransactionId): Source[ByteString, Any] =
     Source.single(ByteString(LogLine(logMsg, "stdout", Instant.now.toString).toJson.compactPrint))
+
+
 }

@@ -20,8 +20,8 @@ package org.apache.openwhisk.core.containerpool
 import akka.actor.Actor
 import akka.actor.ActorRef
 import akka.actor.Cancellable
-import java.time.Instant
 
+import java.time.Instant
 import akka.actor.Status.{Failure => FailureMessage}
 import akka.actor.{FSM, Props, Stash}
 import akka.event.Logging.InfoLevel
@@ -34,9 +34,9 @@ import akka.io.Tcp.Connected
 import akka.pattern.pipe
 import pureconfig.loadConfigOrThrow
 import pureconfig.generic.auto._
+
 import java.net.InetSocketAddress
 import java.net.SocketException
-
 import org.apache.openwhisk.common.MetricEmitter
 import org.apache.openwhisk.common.TransactionId.systemPrefix
 
@@ -46,12 +46,7 @@ import spray.json._
 import org.apache.openwhisk.common.{AkkaLogging, Counter, LoggingMarkers, TransactionId}
 import org.apache.openwhisk.core.ConfigKeys
 import org.apache.openwhisk.core.ack.ActiveAck
-import org.apache.openwhisk.core.connector.{
-  ActivationMessage,
-  CombinedCompletionAndResultMessage,
-  CompletionMessage,
-  ResultMessage
-}
+import org.apache.openwhisk.core.connector.{ActivationMessage, CombinedCompletionAndResultMessage, CompletionMessage, ResultMessage}
 import org.apache.openwhisk.core.containerpool.logging.LogCollectingException
 import org.apache.openwhisk.core.database.UserContext
 import org.apache.openwhisk.core.entity.ExecManifest.ImageName
@@ -420,6 +415,7 @@ class ContainerProxy(factory: (TransactionId,
       val newData = data.withoutResumeRun()
       //if there are items in runbuffer, process them if there is capacity, and stay; otherwise if we have any pending activations, also stay
       logging.info(this, s"动作${newData.action.name}执行完成，在容器${newData.container.containerId}中")
+      commitContainer(newData)
       if (requestWork(data) || activeCount > 0) {
         stay using newData
       } else {
@@ -656,6 +652,13 @@ class ContainerProxy(factory: (TransactionId,
     stay
   }
 
+  /*
+   * Commit a run stop container to a new image to maintain the status
+   */
+  def commitContainer(newData: WarmedData) = {
+    newData.container.commit()(TransactionId.invokerNanny)
+  }
+
   /**
    * Destroys the container after unpausing it if needed. Can be used
    * as a state progression as it goes to Removing.
@@ -799,18 +802,24 @@ class ContainerProxy(factory: (TransactionId,
       case data: WarmedData =>
         Future.successful(None)
       case _ =>
-        val owEnv = (authEnvironment ++ environment ++ Map(
-          "deadline" -> (Instant.now.toEpochMilli + actionTimeout.toMillis).toString.toJson)) map {
-          case (key, value) => "__OW_" + key.toUpperCase -> value
-        }
+//        if(container.imageToUse.contains(container.actionRunningName)) {
+//          logging.info(this, s"跳过容器初始化 $container")
+//          Future.successful(None)
+//        }else{
+          val owEnv = (authEnvironment ++ environment ++ Map(
+            "deadline" -> (Instant.now.toEpochMilli + actionTimeout.toMillis).toString.toJson)) map {
+            case (key, value) => "__OW_" + key.toUpperCase -> value
+          }
 
-        container
-          .initialize(
-            job.action.containerInitializer(env ++ owEnv),
-            actionTimeout,
-            job.action.limits.concurrency.maxConcurrent,
-            Some(job.action.toWhiskAction))
-          .map(Some(_))
+          container
+            .initialize(
+              job.action.containerInitializer(env ++ owEnv),
+              actionTimeout,
+              job.action.limits.concurrency.maxConcurrent,
+              Some(job.action.toWhiskAction))
+            .map(Some(_))
+//        }
+
     }
 
     val activation: Future[WhiskActivation] = initialize

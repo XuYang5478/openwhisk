@@ -117,7 +117,9 @@ class KubernetesContainer(protected[core] val id: ContainerId,
                           protected[core] val addr: ContainerAddress,
                           protected[core] val workerIP: String,
                           protected[core] val nativeContainerId: String,
-                          portForward: Option[PortForward] = None)(implicit kubernetes: KubernetesApi,
+                          portForward: Option[PortForward] = None,
+                          protected val image: String = "",
+                          protected val actionName: String = "")(implicit kubernetes: KubernetesApi,
                                                                    override protected val as: ActorSystem,
                                                                    protected val ec: ExecutionContext,
                                                                    protected val logging: Logging)
@@ -182,4 +184,6 @@ class KubernetesContainer(protected[core] val id: ContainerId,
       .takeWithin(waitForLogs)
       .map { _.toByteString }
   }
+
+  override def commit()(implicit transid: TransactionId): Future[Unit] = Future.successful(())
 }

@@ -21,7 +21,6 @@ import java.io.FileNotFoundException
 import java.nio.file.Files
 import java.nio.file.Paths
 import java.util.concurrent.Semaphore
-
 import akka.actor.ActorSystem
 
 import scala.collection.concurrent.TrieMap
@@ -39,7 +38,7 @@ import org.apache.openwhisk.core.ConfigKeys
 import org.apache.openwhisk.core.containerpool.ContainerId
 import org.apache.openwhisk.core.containerpool.ContainerAddress
 
-import scala.concurrent.duration.Duration
+import scala.concurrent.duration.{Duration, SECONDS}
 
 object DockerContainerId {
 
@@ -201,6 +200,22 @@ class DockerClient(dockerHost: Option[String] = None,
    */
   private val pullsInFlight = TrieMap[String, Future[Unit]]()
 
+  def chooseImage(image: String, actionName: String)(implicit transid: TransactionId): String = {
+    if(actionName=="" || actionName.contains("playground")) return image
+
+    val imageName = s"$image-$actionName"
+    val result = runCmd(Seq("image", "ls", imageName), config.timeouts.pull).transform{
+      case Success(out) => {
+        println(out)
+        println(out.split("\n").length)
+        if (out.split("\n").length <= 1) Success(image) else Success(imageName)
+      }
+      case _ => Success(image)
+    }
+    Await.result(result, Duration(10, SECONDS))
+  }
+
+
   //TODO: 拉取镜像sub
   def pull(image: String)(implicit transid: TransactionId): Future[Unit] =
     pullsInFlight.getOrElseUpdate(image, {
@@ -226,7 +241,19 @@ class DockerClient(dockerHost: Option[String] = None,
     }
   }
 
-  def dump(): Unit = {}
+  def commit(id: ContainerId, image: String, actionName: String)(implicit transid: TransactionId): Future[Unit] = {
+
+    if(image=="" || actionName=="" || actionName.contains("playground") ) {
+      log.info(this, s"无法完全获取 image:$image, action:$actionName")
+      return Future.successful(())
+    }
+
+    val newName = if(image.contains(actionName)) image else s"$image-$actionName"
+
+    log.info(this, s"为函数 $actionName 所生成的容器 $id 创建新的镜像 $image-$actionName")
+    runCmd(Seq("commit", id.asString, newName), config.timeouts.pull).map(_ => ())
+  }
+
 }
 
 trait DockerApi {
@@ -295,6 +322,9 @@ trait DockerApi {
   def ps(filters: Seq[(String, String)] = Seq.empty, all: Boolean = false)(
     implicit transid: TransactionId): Future[Seq[ContainerId]]
 
+
+  def chooseImage(image: String, actionName: String)(implicit transid: TransactionId): String
+
   /**
    * Pulls the given image.
    *
@@ -313,9 +343,10 @@ trait DockerApi {
   def isOomKilled(id: ContainerId)(implicit transid: TransactionId): Future[Boolean]
 
   /*
-   * Dumping the running status of function into the top layer of the container's image
+   * Dumping the running status of function into the top layer of the container's image.
+   * By using commit operation.
    */
-  def dump(): Unit
+  def commit(id: ContainerId, image: String, actionName: String)(implicit transid: TransactionId): Future[Unit]
 }
 
 /** Indicates any error while starting a container that leaves a broken container behind that needs to be removed */

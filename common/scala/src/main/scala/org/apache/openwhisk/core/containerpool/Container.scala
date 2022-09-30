@@ -73,6 +73,8 @@ trait Container {
 
   implicit protected val as: ActorSystem
   protected val id: ContainerId
+  protected val image: String
+  protected val actionName: String
   protected[core] val addr: ContainerAddress
   protected implicit val logging: Logging
   protected implicit val ec: ExecutionContext
@@ -85,6 +87,8 @@ trait Container {
   protected var containerHttpTimeout: FiniteDuration = 60.seconds
 
   def containerId: ContainerId = id
+  def imageToUse: String = image
+  def actionRunningName: String = actionName
 
   /** Stops the container from consuming CPU cycles. NOT thread-safe - caller must synchronize. */
   def suspend()(implicit transid: TransactionId): Future[Unit] = {
@@ -103,6 +107,12 @@ trait Container {
 
   /** Obtains logs up to a given threshold from the container. Optionally waits for a sentinel to appear. */
   def logs(limit: ByteSize, waitForSentinel: Boolean)(implicit transid: TransactionId): Source[ByteString, Any]
+
+  /*
+   * Dumping the running status of function into the top layer of the container's image.
+   * By using commit operation.
+   */
+  def commit()(implicit transid: TransactionId): Future[Unit]
 
   /** Completely destroys this instance of the container. */
   def destroy()(implicit transid: TransactionId): Future[Unit] = {
@@ -125,6 +135,7 @@ trait Container {
     callContainer("/init", body, timeout, maxConcurrent, retry = true)
       .andThen { // never fails
         case Success(r: RunResult) =>
+          logging.info(this ,s"容器 $id 初始化结果：${r.toBriefString}")
           transid.finished(
             this,
             start.copy(start = r.interval.start),
@@ -177,6 +188,7 @@ trait Container {
     callContainer("/run", body, timeout, maxConcurrent, retry = false, reschedule)
       .andThen { // never fails
         case Success(r: RunResult) =>
+          logging.info(this, s"容器 $id 运行结果：${r.toBriefString}")
           transid.finished(
             this,
             start.copy(start = r.interval.start),
