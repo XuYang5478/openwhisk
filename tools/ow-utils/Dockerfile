@@ -67,8 +67,8 @@ RUN wget --no-verbose https://mirrors.tuna.tsinghua.edu.cn/docker-ce/linux/stati
   chmod +x /usr/bin/docker
 
 # Install kubectl in /usr/local/bin
-COPY ./kubectl .
-RUN chmod +x kubectl && mv kubectl /usr/local/bin/kubectl
+RUN wget -q http://qn.onlyapps.cn/kubectl && \
+  chmod +x kubectl && mv kubectl /usr/local/bin/kubectl
 
 # Install `wsk` cli in /usr/local/bin
 RUN wget -q https://download.fastgit.org/apache/openwhisk-cli/releases/download/$WHISK_CLI_VERSION/OpenWhisk_CLI-$WHISK_CLI_VERSION-linux-amd64.tgz && \
