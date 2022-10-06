@@ -18,11 +18,15 @@
 buildscript {
     repositories {
         // jcenter()
-        maven{ url 'http://maven.aliyun.com/repository/central' }
-        maven{ url 'http://maven.aliyun.com/repository/public' }
-        maven{ url 'http://maven.aliyun.com/repository/gradle-plugin'}
-        maven{ url 'http://maven.aliyun.com/repository/jcenter'}
-        maven{ url 'http://maven.aliyun.com/repository/google' }
+        maven { url 'https://maven.aliyun.com/repository/releases' }
+        maven { url 'https://maven.aliyun.com/repository/public' }
+        maven { url 'https://maven.aliyun.com/repository/central' }
+        maven { url 'https://maven.aliyun.com/repository/jcenter' }
+        maven { url 'https://maven.aliyun.com/repository/google' }
+        maven { url 'https://maven.aliyun.com/repository/gradle-plugin' }
+        maven { url 'https://maven.aliyun.com/repository/grails-core'}
+        maven { url 'https://maven.aliyun.com/repository/apache-snapshots'}
+        maven { url "https://jitpack.io" }
     }
     dependencies {
         classpath "cz.alenkacz:gradle-scalafmt:${gradle.scalafmt.version}"
@@ -31,6 +35,20 @@ buildscript {
 
 plugins {
     id "org.scoverage" version "7.0.0" apply false
+}
+
+allprojects {
+    repositories {
+        maven { url 'https://maven.aliyun.com/repository/releases' }
+        maven { url 'https://maven.aliyun.com/repository/public' }
+        maven { url 'https://maven.aliyun.com/repository/central' }
+        maven { url 'https://maven.aliyun.com/repository/jcenter' }
+        maven { url 'https://maven.aliyun.com/repository/google' }
+        maven { url 'https://maven.aliyun.com/repository/gradle-plugin' }
+        maven { url 'https://maven.aliyun.com/repository/grails-core'}
+        maven { url 'https://maven.aliyun.com/repository/apache-snapshots'}
+        maven { url "https://jitpack.io" }
+    }
 }
 
 subprojects {

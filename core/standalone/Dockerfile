@@ -22,10 +22,10 @@ ADD bin/init /
 ADD bin/stop bin/waitready /bin/
 RUN chmod +x /bin/stop /bin/waitready ;\
   curl -sL \
-  https://download.docker.com/linux/static/stable/x86_64/docker-${DOCKER_VERSION}.tgz \
+  https://mirrors.tuna.tsinghua.edu.cn/docker-ce/linux/static/stable/x86_64/docker-${DOCKER_VERSION}.tgz \
   | tar xzvf -  -C /usr/bin --strip 1 docker/docker ;\
   curl -sL \
-  https://github.com/apache/openwhisk-cli/releases/download/${WSK_VERSION}/OpenWhisk_CLI-${WSK_VERSION}-linux-amd64.tgz \
+  https://download.fastgit.org/apache/openwhisk-cli/releases/download/${WSK_VERSION}/OpenWhisk_CLI-${WSK_VERSION}-linux-amd64.tgz \
   | tar xzvf - -C /usr/bin wsk
 ADD ${OPENWHISK_JAR} /openwhisk-standalone.jar
 WORKDIR /

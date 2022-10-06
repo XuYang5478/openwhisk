@@ -17,10 +17,12 @@
 
 FROM adoptopenjdk/openjdk8:jdk8u262-b10
 
-ENV DOCKER_VERSION 1.12.0
+ENV DOCKER_VERSION 18.09.9
 ENV KUBECTL_VERSION v1.16.3
 ENV WHISK_CLI_VERSION 1.2.0
 ENV WHISKDEPLOY_CLI_VERSION latest
+
+RUN rm /bin/sh && ln -s /bin/bash /bin/sh
 
 RUN sed -i "s@http://.*archive.ubuntu.com@http://mirrors.tuna.tsinghua.edu.cn@g" /etc/apt/sources.list
 RUN sed -i "s@http://.*security.ubuntu.com@http://mirrors.tuna.tsinghua.edu.cn@g" /etc/apt/sources.list
@@ -29,8 +31,6 @@ RUN apt-get update && apt-get install -y \
   git \
   jq \
   libffi-dev \
-  nodejs \
-  npm \
   python \
   python-pip \
   wget \
@@ -39,7 +39,12 @@ RUN apt-get update && apt-get install -y \
 && rm -rf /var/lib/apt/lists/*
 
 # update npm
-RUN npm install -g n && n stable && hash -r
+RUN wget -q http://mirrors.tuna.tsinghua.edu.cn/nodejs-release/v16.17.1/node-v16.17.1-linux-x64.tar.gz -O - | tar zxf - -C /usr/local && \
+  export PATH=/usr/local/node-v16.17.1-linux-x64/bin:$PATH && \
+  echo 'PATH=/usr/local/node-v16.17.1-linux-x64/bin:$PATH' >> /etc/profile && \
+  source /etc/profile
+CMD npm config set registry https://registry.npmmirror.com
+# RUN npm install -g n && n stable && hash -r
 
 RUN locale-gen en_US.UTF-8
 ENV LANG='en_US.UTF-8' LANGUAGE='en_US:en' LC_ALL='en_US.UTF-8'
@@ -56,16 +61,17 @@ RUN pip install cryptography==2.5 && \
     pip install docker
 
 # Install docker client
-RUN wget --no-verbose https://get.docker.com/builds/Linux/x86_64/docker-${DOCKER_VERSION}.tgz && \
+RUN wget --no-verbose https://mirrors.tuna.tsinghua.edu.cn/docker-ce/linux/static/stable/x86_64/docker-${DOCKER_VERSION}.tgz && \
   tar --strip-components 1 -xvzf docker-${DOCKER_VERSION}.tgz -C /usr/bin docker/docker && \
   rm -f docker-${DOCKER_VERSION}.tgz && \
   chmod +x /usr/bin/docker
 
 # Install kubectl in /usr/local/bin
-RUN curl -Lo ./kubectl https://storage.googleapis.com/kubernetes-release/release/${KUBECTL_VERSION}/bin/linux/amd64/kubectl && chmod +x kubectl && mv kubectl /usr/local/bin/kubectl
+COPY ./kubectl .
+RUN chmod +x kubectl && mv kubectl /usr/local/bin/kubectl
 
 # Install `wsk` cli in /usr/local/bin
-RUN wget -q https://ghproxy.com/https://github.com/apache/openwhisk-cli/releases/download/$WHISK_CLI_VERSION/OpenWhisk_CLI-$WHISK_CLI_VERSION-linux-amd64.tgz && \
+RUN wget -q https://download.fastgit.org/apache/openwhisk-cli/releases/download/$WHISK_CLI_VERSION/OpenWhisk_CLI-$WHISK_CLI_VERSION-linux-amd64.tgz && \
   tar xzf OpenWhisk_CLI-$WHISK_CLI_VERSION-linux-amd64.tgz -C /usr/local/bin wsk && \
   rm OpenWhisk_CLI-$WHISK_CLI_VERSION-linux-amd64.tgz
 
