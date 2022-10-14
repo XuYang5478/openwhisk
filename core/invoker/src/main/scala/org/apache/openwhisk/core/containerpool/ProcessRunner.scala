@@ -15,15 +15,13 @@
  * limitations under the License.
  */
 
-package org.apache.openwhisk.core.containerpool.docker
+package org.apache.openwhisk.core.containerpool
 
 import akka.actor.ActorSystem
 
 import scala.collection.mutable
-import scala.concurrent.ExecutionContext
-import scala.concurrent.Future
-import scala.concurrent.blocking
 import scala.concurrent.duration.{Duration, FiniteDuration}
+import scala.concurrent.{ExecutionContext, Future, blocking}
 import scala.sys.process._
 
 trait ProcessRunner {

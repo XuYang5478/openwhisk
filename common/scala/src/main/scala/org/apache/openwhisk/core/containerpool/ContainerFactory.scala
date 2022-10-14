@@ -23,6 +23,7 @@ import org.apache.openwhisk.core.WhiskConfig
 import org.apache.openwhisk.core.entity.{ByteSize, ExecManifest, ExecutableWhiskAction, InvokerInstanceId}
 import org.apache.openwhisk.spi.Spi
 
+import java.util.Locale
 import scala.concurrent.Future
 import scala.concurrent.duration.FiniteDuration
 import scala.math.max
@@ -121,8 +122,14 @@ trait ContainerFactory {
     println(s"image: $actionImage")
     println(s"调用动作的参数：${action.get.name}") //函数名
 
-    val actionName: String = action match {
-      case Some(a) => a.name.asString
+    // 函数 whisk.system/user734710-counter 将会使用镜像 openwhisk/action-nodejs-v14:nightly
+    // 函数 guest-mycounter 将会使用镜像 openwhisk/action-nodejs-v14:nightly
+    // 改下镜像名，把函数名放在冒号前面
+    val actionName: String = if(name.contains("wskowdev")||name.contains("whisksystem")) "" else action match {
+      case Some(a) => {
+        val user = a.namespace.asString.split("/").last
+        s"$user-${a.name.asString}".toLowerCase(Locale.ROOT)
+      }
       case None => ""
     }
     createContainer(tid, name, actionName, actionImage, userProvidedImage, memory, cpuShares)

@@ -35,8 +35,8 @@ import pureconfig._
 import pureconfig.generic.auto._
 import org.apache.openwhisk.common.{Logging, LoggingMarkers, TransactionId}
 import org.apache.openwhisk.core.ConfigKeys
-import org.apache.openwhisk.core.containerpool.ContainerId
-import org.apache.openwhisk.core.containerpool.ContainerAddress
+import org.apache.openwhisk.core.containerpool.ContainerProxy.getStatefulImageName
+import org.apache.openwhisk.core.containerpool.{ContainerAddress, ContainerId, ExitStatus, ProcessRunner, ProcessTimeoutException, ProcessUnsuccessfulException}
 
 import scala.concurrent.duration.{Duration, SECONDS}
 
@@ -203,11 +203,11 @@ class DockerClient(dockerHost: Option[String] = None,
   def chooseImage(image: String, actionName: String)(implicit transid: TransactionId): String = {
     if(actionName=="" || actionName.contains("playground")) return image
 
-    val imageName = s"$image-$actionName"
+    val imageName = getStatefulImageName(image, actionName)
     val result = runCmd(Seq("image", "ls", imageName), config.timeouts.pull).transform{
       case Success(out) => {
-        println(out)
-        println(out.split("\n").length)
+//        println(out)
+//        println(out.split("\n").length)
         if (out.split("\n").length <= 1) Success(image) else Success(imageName)
       }
       case _ => Success(image)
@@ -248,9 +248,9 @@ class DockerClient(dockerHost: Option[String] = None,
       return Future.successful(())
     }
 
-    val newName = if(image.contains(actionName)) image else s"$image-$actionName"
+    val newName = getStatefulImageName(image, actionName)
 
-    log.info(this, s"为函数 $actionName 所生成的容器 $id 创建新的镜像 $image-$actionName")
+    log.info(this, s"为函数 $actionName 所生成的容器 $id 创建新的镜像 $newName")
     runCmd(Seq("commit", id.asString, newName), config.timeouts.pull).map(_ => ())
   }
 

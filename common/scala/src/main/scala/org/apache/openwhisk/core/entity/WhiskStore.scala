@@ -18,7 +18,6 @@
 package org.apache.openwhisk.core.entity
 
 import java.time.Instant
-
 import scala.concurrent.Future
 import scala.language.postfixOps
 import scala.util.Try
@@ -38,6 +37,7 @@ import org.apache.openwhisk.core.database.StaleParameter
 import org.apache.openwhisk.spi.SpiLoader
 import pureconfig._
 import pureconfig.generic.auto._
+
 import scala.reflect.classTag
 
 object types {

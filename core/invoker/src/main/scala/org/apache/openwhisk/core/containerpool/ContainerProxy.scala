@@ -1035,6 +1035,16 @@ object ContainerProxy {
     s"${ContainerFactory.containerNamePrefix(instance)}_${containerCount.next()}_${sanitizedPrefix}_${sanitizedSuffix}"
   }
 
+  def getStatefulImageName(imageName: String, actionName: String): String = {
+    if (imageName.contains(actionName)) imageName else {
+      val contents = imageName.split(":")
+      if (contents.length == 2) s"${contents(0)}-$actionName:${contents(1)}" else {
+        println(s"无法指定有状态镜像名：$imageName")
+        imageName
+      }
+    }
+  }
+
   /**
    * Creates a WhiskActivation ready to be sent via active ack.
    *
@@ -1196,3 +1206,5 @@ case class ActivationUnsuccessfulError(activation: WhiskActivation) extends Acti
 
 /** Indicates reading logs for an activation failed (terminally, truncated) */
 case class ActivationLogReadingError(activation: WhiskActivation) extends ActivationError
+
+

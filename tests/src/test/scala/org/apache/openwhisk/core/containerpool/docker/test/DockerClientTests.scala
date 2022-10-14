@@ -18,8 +18,8 @@
 package org.apache.openwhisk.core.containerpool.docker.test
 
 import akka.actor.ActorSystem
-import java.util.concurrent.Semaphore
 
+import java.util.concurrent.Semaphore
 import scala.concurrent.Await
 import scala.concurrent.ExecutionContext
 import scala.concurrent.ExecutionContext.Implicits.global
@@ -38,8 +38,7 @@ import common.{StreamLogging, WskActorSystem}
 import org.apache.openwhisk.common.LogMarker
 import org.apache.openwhisk.common.LoggingMarkers.INVOKER_DOCKER_CMD
 import org.apache.openwhisk.common.TransactionId
-import org.apache.openwhisk.core.containerpool.ContainerAddress
-import org.apache.openwhisk.core.containerpool.ContainerId
+import org.apache.openwhisk.core.containerpool.{ContainerAddress, ContainerId, ExitStatus, ProcessRunningException, ProcessTimeoutException, ProcessUnsuccessfulException}
 import org.apache.openwhisk.core.containerpool.docker._
 import org.apache.openwhisk.utils.retry
 

@@ -43,8 +43,8 @@ import org.apache.commons.lang3.exception.ExceptionUtils
 import org.apache.openwhisk.common.LoggingMarkers
 import org.apache.openwhisk.common.{ConfigMapValue, Logging, TransactionId}
 import org.apache.openwhisk.core.ConfigKeys
-import org.apache.openwhisk.core.containerpool.docker.ProcessRunner
-import org.apache.openwhisk.core.containerpool.{ContainerAddress, ContainerId}
+import org.apache.openwhisk.core.containerpool.ContainerProxy.getStatefulImageName
+import org.apache.openwhisk.core.containerpool.{ContainerAddress, ContainerId, ProcessRunner}
 import org.apache.openwhisk.core.entity.ByteSize
 import org.apache.openwhisk.core.entity.size._
 import org.apache.openwhisk.http.Messages
@@ -56,8 +56,8 @@ import spray.json._
 import scala.annotation.tailrec
 import scala.collection.immutable.Queue
 import scala.collection.mutable
-import scala.concurrent.duration._
-import scala.concurrent.{blocking, ExecutionContext, Future}
+import scala.concurrent.duration.{Duration, _}
+import scala.concurrent.{Await, ExecutionContext, Future, blocking}
 import scala.util.control.NonFatal
 import scala.util.{Failure, Success, Try}
 
@@ -146,13 +146,30 @@ class KubernetesClient(
 
   private val podBuilder = new WhiskPodBuilder(kubeRestClient, config)
 
+  protected val nerdCmd: Seq[String] = Seq("/usr/bin/nerdctl")
+
+  def chooseImage(image: String, action: String)(implicit transid: TransactionId): String = {
+    if(action=="") return image
+    //    val couchDbStore = SpiLoader.get[CouchDbRestStore]
+    val newImage = getStatefulImageName(image, action)
+    val result = runCmd(Seq("image", "ls", newImage), config.timeouts.run).transform{
+      case Success(out) => {
+        if (out.split("\n").length <= 1) Success(image) else Success(newImage)
+      }
+      case _ => Success(image)
+    }
+    Await.result(result, Duration(10, SECONDS))
+}
+
   def run(name: String,
           image: String,
+          actionName: String,
           memory: ByteSize = 256.MB,
           environment: Map[String, String] = Map.empty,
           labels: Map[String, String] = Map.empty)(implicit transid: TransactionId): Future[KubernetesContainer] = {
 
-    val (pod, pdb) = podBuilder.buildPodSpec(name, image, memory, environment, labels, config)
+    val imageToUse = chooseImage(image, actionName)
+    val (pod, pdb) = podBuilder.buildPodSpec(name, imageToUse, memory, environment, labels, config)
     if (transid.meta.extraLogging) {
       log.info(this, s"Pod spec being created\n${Serialization.asYaml(pod)}")
     }
@@ -160,7 +177,7 @@ class KubernetesClient(
     val start = transid.started(
       this,
       LoggingMarkers.INVOKER_KUBEAPI_CMD("create"),
-      s"launching pod $name (image:$image, mem: ${memory.toMB}) (timeout: ${config.timeouts.run.toSeconds}s)",
+      s"launching pod $name (image:$imageToUse, actionName: $actionName mem: ${memory.toMB}) (timeout: ${config.timeouts.run.toSeconds}s)",
       logLevel = akka.event.Logging.InfoLevel)
 
     //create the pod; catch any failure to end the transaction timer
@@ -188,7 +205,7 @@ class KubernetesClient(
         waitForPod(namespace, createdPod, start.start, config.timeouts.run)
           .map { readyPod =>
             transid.finished(this, start, logLevel = InfoLevel)
-            toContainer(readyPod)
+            toContainer(readyPod, imageToUse, actionName)
           }
           .recoverWith {
             case e =>
@@ -215,6 +232,19 @@ class KubernetesClient(
           }
       }
     }
+  }
+
+  def commit(container: KubernetesContainer)(implicit transid: TransactionId): Future[Unit] = {
+    val actionName = container.actionRunningName
+    val imageName = container.imageToUse
+
+    if(actionName=="" || imageName=="") return Future.successful(())
+
+    val containerId = container.id
+    val newName = getStatefulImageName(imageName, actionName)
+
+    log.info(this, s"为函数 $actionName 所生成的容器 ${container} 创建新的镜像 $newName")
+    runCmd(Seq("commit", containerId.asString, newName), config.timeouts.run).map(_ => ())
   }
 
   def rm(container: KubernetesContainer)(implicit transid: TransactionId): Future[Unit] = {
@@ -305,7 +335,7 @@ class KubernetesClient(
 
   }
 
-  protected def toContainer(pod: Pod): KubernetesContainer = {
+  protected def toContainer(pod: Pod, image: String, actionName: String): KubernetesContainer = {
     val id = ContainerId(pod.getMetadata.getName)
 
     val portFwd = if (config.portForwardingEnabled) {
@@ -320,7 +350,7 @@ class KubernetesClient(
     // By convention, kubernetes adds a docker:// prefix when using docker as the low-level container engine
     val nativeContainerId = pod.getStatus.getContainerStatuses.get(0).getContainerID.stripPrefix("docker://")
     implicit val kubernetes = this
-    new KubernetesContainer(id, addr, workerIP, nativeContainerId, portFwd)
+    new KubernetesContainer(id, addr, workerIP, nativeContainerId, portFwd, image, actionName)
   }
 
   // check for ready status every 1 second until timeout (minus the start time, which is the time for the pod create call) has past
@@ -377,6 +407,20 @@ class KubernetesClient(
     } catch {
       case e: Throwable => Future.failed(e)
     }
+
+
+  protected def runCmd(args: Seq[String], timeout: Duration)(implicit transid: TransactionId): Future[String] = {
+    val cmd = nerdCmd ++ Seq("-n", "k8s.io") ++ args
+    val start = transid.started(
+      this,
+      LoggingMarkers.INVOKER_NERD_CMD(args.head),
+      s"running ${cmd.mkString(" ")} (timeout: $timeout)",
+      logLevel = InfoLevel)
+    executeProcess(cmd, timeout).andThen {
+      case Success(_) => transid.finished(this, start, logLevel = InfoLevel)
+      case Failure(t) => transid.failed(this, start, t.getMessage, ErrorLevel)
+    }
+  }
 }
 object KubernetesClient {
 
@@ -403,10 +447,12 @@ trait KubernetesApi {
 
   def run(name: String,
           image: String,
+          actionName: String,
           memory: ByteSize,
           environment: Map[String, String] = Map.empty,
           labels: Map[String, String] = Map.empty)(implicit transid: TransactionId): Future[KubernetesContainer]
 
+  def commit(container: KubernetesContainer)(implicit transid: TransactionId): Future[Unit]
   def rm(container: KubernetesContainer)(implicit transid: TransactionId): Future[Unit]
   def rm(podName: String)(implicit transid: TransactionId): Future[Unit]
   def rm(labels: Map[String, String], ensureUnpaused: Boolean)(implicit transid: TransactionId): Future[Unit]

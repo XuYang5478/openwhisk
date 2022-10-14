@@ -19,12 +19,12 @@ package org.apache.openwhisk.core.containerpool.docker.test
 
 import akka.actor.ActorSystem
 import common.WskActorSystem
+import org.apache.openwhisk.core.containerpool.{ExitStatus, ProcessRunner, ProcessRunningException, ProcessTimeoutException, ProcessUnsuccessfulException}
 
 import scala.concurrent.Future
 import org.junit.runner.RunWith
 import org.scalatest.FlatSpec
 import org.scalatest.junit.JUnitRunner
-
 import org.apache.openwhisk.core.containerpool.docker._
 
 import scala.concurrent.ExecutionContext

@@ -81,6 +81,7 @@ class KubernetesContainerFactory(
       tid,
       name,
       image,
+      actionName,
       userProvidedImage,
       memory,
       environment = Map("__OW_API_HOST" -> config.wskApiHost) ++ containerArgsConfig.extraEnvVarMap,

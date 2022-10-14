@@ -57,6 +57,7 @@ object KubernetesContainer {
   def create(transid: TransactionId,
              name: String,
              image: String,
+             actionName: String = "",
              userProvidedImage: Boolean = false,
              memory: ByteSize = 256.MB,
              environment: Map[String, String] = Map.empty,
@@ -70,7 +71,7 @@ object KubernetesContainer {
     val podName = if (origName.endsWith("-")) origName.reverse.dropWhile(_ == '-').reverse else origName
 
     for {
-      container <- kubernetes.run(podName, image, memory, environment, labels).recoverWith {
+      container <- kubernetes.run(podName, image, actionName, memory, environment, labels).recoverWith {
         case e: KubernetesPodApiException =>
           //apiserver call failed - this will expose a different error to users
           cleanupFailedPod(e, podName, WhiskContainerStartupError(Messages.resourceProvisionError))
@@ -185,5 +186,5 @@ class KubernetesContainer(protected[core] val id: ContainerId,
       .map { _.toByteString }
   }
 
-  override def commit()(implicit transid: TransactionId): Future[Unit] = Future.successful(())
+  override def commit()(implicit transid: TransactionId): Future[Unit] = kubernetes.commit(this)
 }
