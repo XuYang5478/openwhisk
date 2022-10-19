@@ -154,6 +154,7 @@ class KubernetesClient(
     val newImage = getStatefulImageName(image, action)
     val result = runCmd(Seq("image", "ls", newImage), config.timeouts.run).transform{
       case Success(out) => {
+        println(out)
         if (out.split("\n").length <= 1) Success(image) else Success(newImage)
       }
       case _ => Success(image)
@@ -169,6 +170,9 @@ class KubernetesClient(
           labels: Map[String, String] = Map.empty)(implicit transid: TransactionId): Future[KubernetesContainer] = {
 
     val imageToUse = chooseImage(image, actionName)
+
+    log.info(this, s"动作$actionName 将会使用镜像 $imageToUse")
+
     val (pod, pdb) = podBuilder.buildPodSpec(name, imageToUse, memory, environment, labels, config)
     if (transid.meta.extraLogging) {
       log.info(this, s"Pod spec being created\n${Serialization.asYaml(pod)}")
@@ -244,7 +248,7 @@ class KubernetesClient(
     val newName = getStatefulImageName(imageName, actionName)
 
     log.info(this, s"为函数 $actionName 所生成的容器 ${container} 创建新的镜像 $newName")
-    runCmd(Seq("commit", containerId.asString, newName), config.timeouts.run).map(_ => ())
+    runCmd(Seq("commit", "-p=false", containerId.asString, newName), config.timeouts.run).map(_ => ())
   }
 
   def rm(container: KubernetesContainer)(implicit transid: TransactionId): Future[Unit] = {

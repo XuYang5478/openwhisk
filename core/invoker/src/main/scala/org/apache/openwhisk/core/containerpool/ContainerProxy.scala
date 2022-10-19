@@ -1036,7 +1036,7 @@ object ContainerProxy {
   }
 
   def getStatefulImageName(imageName: String, actionName: String): String = {
-    if (imageName.contains(actionName)) imageName else {
+    if (actionName=="" || imageName.contains(actionName)) imageName else {
       val contents = imageName.split(":")
       if (contents.length == 2) s"${contents(0)}-$actionName:${contents(1)}" else {
         println(s"无法指定有状态镜像名：$imageName")
