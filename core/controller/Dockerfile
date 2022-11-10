@@ -44,7 +44,7 @@ RUN curl -sSL -o docker-${DOCKER_VERSION}.tgz https://mirrors.tuna.tsinghua.edu.
 ##################################################################################################
 
 # Install swagger-ui
-RUN curl -sSL -o swagger-ui-v${SWAGGER_UI_VERSION}.tar.gz --no-verbose https://download.fastgit.org/swagger-api/swagger-ui/archive/v${SWAGGER_UI_VERSION}.tar.gz && \
+RUN curl -sSL -o swagger-ui-v${SWAGGER_UI_VERSION}.tar.gz --no-verbose https://github.com/swagger-api/swagger-ui/archive/v${SWAGGER_UI_VERSION}.tar.gz && \
     echo "${SWAGGER_UI_DOWNLOAD_SHA256}  swagger-ui-v${SWAGGER_UI_VERSION}.tar.gz" | sha256sum -c - && \
     mkdir swagger-ui && \
     tar zxf swagger-ui-v${SWAGGER_UI_VERSION}.tar.gz -C /swagger-ui --strip-components=2 swagger-ui-${SWAGGER_UI_VERSION}/dist && \

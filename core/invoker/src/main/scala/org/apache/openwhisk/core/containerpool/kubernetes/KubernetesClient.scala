@@ -146,13 +146,13 @@ class KubernetesClient(
 
   private val podBuilder = new WhiskPodBuilder(kubeRestClient, config)
 
-  protected val nerdCmd: Seq[String] = Seq("/usr/bin/nerdctl")
+  protected val shCmd: Seq[String] = Seq("/bin/sh", "-c")
 
   def chooseImage(image: String, action: String)(implicit transid: TransactionId): String = {
     if(action=="") return image
     //    val couchDbStore = SpiLoader.get[CouchDbRestStore]
     val newImage = getStatefulImageName(image, action)
-    val result = runCmd(Seq("image", "ls", newImage), config.timeouts.run).transform{
+    val result = runCmd(createNerdCmd(s"image ls $newImage"), config.timeouts.run).transform{
       case Success(out) => {
         println(out)
         if (out.split("\n").length <= 1) Success(image) else Success(newImage)
@@ -248,7 +248,7 @@ class KubernetesClient(
     val newName = getStatefulImageName(imageName, actionName)
 
     log.info(this, s"为函数 $actionName 所生成的容器 ${container} 创建新的镜像 $newName")
-    runCmd(Seq("commit", "-p=false", containerId.asString, newName), config.timeouts.run).map(_ => ())
+    runCmd(createNerdCmd(s"commit -p=false ${containerId.asString} $newName"), config.timeouts.run).map(_ => ())
   }
 
   def rm(container: KubernetesContainer)(implicit transid: TransactionId): Future[Unit] = {
@@ -413,17 +413,20 @@ class KubernetesClient(
     }
 
 
-  protected def runCmd(args: Seq[String], timeout: Duration)(implicit transid: TransactionId): Future[String] = {
-    val cmd = nerdCmd ++ Seq("-n", "k8s.io") ++ args
+  protected def runCmd(cmd: Seq[String], timeout: Duration)(implicit transid: TransactionId): Future[String] = {
     val start = transid.started(
       this,
-      LoggingMarkers.INVOKER_NERD_CMD(args.head),
+      LoggingMarkers.INVOKER_NERD_CMD(cmd.last),
       s"running ${cmd.mkString(" ")} (timeout: $timeout)",
       logLevel = InfoLevel)
     executeProcess(cmd, timeout).andThen {
       case Success(_) => transid.finished(this, start, logLevel = InfoLevel)
       case Failure(t) => transid.failed(this, start, t.getMessage, ErrorLevel)
     }
+  }
+
+  protected def createNerdCmd(args: String): Seq[String] = {
+    shCmd ++ Seq(s"nerdctl -n k8s.io $args")
   }
 }
 object KubernetesClient {
