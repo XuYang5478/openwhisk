@@ -125,7 +125,7 @@ trait ContainerFactory {
     // 函数 whisk.system/user734710-counter 将会使用镜像 openwhisk/action-nodejs-v14:nightly
     // 函数 guest-mycounter 将会使用镜像 openwhisk/action-nodejs-v14:nightly
     // 改下镜像名，把函数名放在冒号前面
-    val actionName: String = if(name.contains("wskowdev")||name.contains("whisksystem")) "" else action match {
+    val actionName: String = if(name.contains("whisksystem")) "" else action match {
       case Some(a) => {
         val user = a.namespace.asString.split("/").last
         s"$user-${a.name.asString}".toLowerCase(Locale.ROOT)

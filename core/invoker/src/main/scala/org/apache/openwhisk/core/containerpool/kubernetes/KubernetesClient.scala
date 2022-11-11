@@ -242,7 +242,10 @@ class KubernetesClient(
     val actionName = container.actionRunningName
     val imageName = container.imageToUse
 
-    if(actionName=="" || imageName=="") return Future.successful(())
+    if(actionName=="" || imageName=="") {
+      log.info(this, s"跳过commit，函数使用的镜像为 $imageName")
+      return Future.successful(())
+    }
 
     val containerId = container.id
     val newName = getStatefulImageName(imageName, actionName)
