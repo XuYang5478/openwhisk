@@ -171,7 +171,7 @@ class KubernetesClient(
 
     val imageToUse = chooseImage(image, actionName)
 
-    log.info(this, s"动作$actionName 将会使用镜像 $imageToUse")
+    log.info(this, s"动作 $actionName 将会使用镜像 $imageToUse")
 
     val (pod, pdb) = podBuilder.buildPodSpec(name, imageToUse, memory, environment, labels, config)
     if (transid.meta.extraLogging) {
