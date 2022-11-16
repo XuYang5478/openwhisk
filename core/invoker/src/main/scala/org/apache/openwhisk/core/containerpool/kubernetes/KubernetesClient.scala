@@ -146,7 +146,7 @@ class KubernetesClient(
 
   private val podBuilder = new WhiskPodBuilder(kubeRestClient, config)
 
-  protected val ControllerAddr = "172.18.0.3:8080"
+  protected val ControllerAddr = "172.18.0.3:8000"
 
   def chooseImage(image: String, action: String)(implicit transid: TransactionId): String = {
     if (action == "") return image
