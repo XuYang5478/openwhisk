@@ -56,8 +56,8 @@ import spray.json._
 import scala.annotation.tailrec
 import scala.collection.immutable.Queue
 import scala.collection.mutable
-import scala.concurrent.duration.{Duration, _}
-import scala.concurrent.{Await, ExecutionContext, Future, blocking}
+import scala.concurrent.duration._
+import scala.concurrent.{ExecutionContext, Future, blocking}
 import scala.util.control.NonFatal
 import scala.util.{Failure, Success, Try}
 
@@ -146,21 +146,30 @@ class KubernetesClient(
 
   private val podBuilder = new WhiskPodBuilder(kubeRestClient, config)
 
-  protected val shCmd: Seq[String] = Seq("/bin/sh", "-c")
+  protected val ControllerAddr = "172.18.0.3:8080"
 
   def chooseImage(image: String, action: String)(implicit transid: TransactionId): String = {
-    if(action=="") return image
+    if (action == "") return image
     //    val couchDbStore = SpiLoader.get[CouchDbRestStore]
     val newImage = getStatefulImageName(image, action)
-    val result = runCmd(createNerdCmd(s"image ls $newImage"), config.timeouts.run).transform{
-      case Success(out) => {
-        println(out)
-        if (out.split("\n").length <= 1) Success(image) else Success(newImage)
-      }
-      case _ => Success(image)
+
+    val data = Map("ImageName" -> newImage, "ActionName" -> action)
+
+    val result = ServerClient.postRequest(s"http://$ControllerAddr/image/check", data)
+    if (result == "yes") {
+      newImage
+    } else {
+      image
     }
-    Await.result(result, Duration(10, SECONDS))
-}
+//    runCmd(createNerdCmd(s"image ls $newImage"), config.timeouts.run).transform{
+//      case Success(out) => {
+//        println(out)
+//        if (out.split("\n").length <= 1) Success(image) else Success(newImage)
+//      }
+//      case _ => Success(image)
+//    }
+//    Await.result(result, Duration(10, SECONDS))
+  }
 
   def run(name: String,
           image: String,
@@ -242,19 +251,27 @@ class KubernetesClient(
     val actionName = container.actionRunningName
     val imageName = container.imageToUse
 
-    if(actionName=="" || imageName=="") {
+    if (actionName == "" || imageName == "") {
       log.info(this, s"跳过commit，函数使用的镜像为 $imageName")
       return Future.successful(())
     }
 
-    val containerId = container.id
+    val containerId = container.nativeContainerId
     val newName = getStatefulImageName(imageName, actionName)
+    val containerHost = container.workerIP
 
+    val data = Map("Id" -> containerId, "ImageName" -> newName)
     log.info(this, s"为函数 $actionName 所生成的容器 ${container} 创建新的镜像 $newName")
-    runCmd(createNerdCmd(s"commit -p=false ${containerId.asString} $newName"), config.timeouts.run).map(_ => ())
+    ServerClient.postRequest(s"http://$containerHost:8000/container/commit", data)
+
+    Future.successful(())
+//    runCmd(createNerdCmd(s"commit -p=false ${containerId.asString} $newName"), config.timeouts.run).map(_ => ())
   }
 
   def rm(container: KubernetesContainer)(implicit transid: TransactionId): Future[Unit] = {
+    val data = Map("Id" -> container.nativeContainerId, "ActionName" -> container.actionRunningName)
+    val result = ServerClient.postRequest(s"http://${container.workerIP}:8000/container/stop", data)
+    log.info(this, s"停止容器 ${container.id.asString}，gossip 服务关闭状态：$result")
     deleteByName(container.id.asString)
   }
 
@@ -357,7 +374,9 @@ class KubernetesClient(
     // By convention, kubernetes adds a docker:// prefix when using docker as the low-level container engine
     val nativeContainerId = pod.getStatus.getContainerStatuses.get(0).getContainerID.stripPrefix("docker://")
 
-    log.info(this, s"创建容器 id=$id, nativeId=$nativeContainerId, workerIP=$workerIP")
+    val data = Map("Id" -> nativeContainerId, "ActionName" -> actionName)
+    val result = ServerClient.postRequest(s"http://$workerIP:8000/container/start", data)
+    log.info(this, s"创建容器 id=$id, workerIP=$workerIP, gossip 服务状态：$result")
 
     implicit val kubernetes = this
     new KubernetesContainer(id, addr, workerIP, nativeContainerId, portFwd, image, actionName)
@@ -417,23 +436,6 @@ class KubernetesClient(
     } catch {
       case e: Throwable => Future.failed(e)
     }
-
-
-  protected def runCmd(cmd: Seq[String], timeout: Duration)(implicit transid: TransactionId): Future[String] = {
-    val start = transid.started(
-      this,
-      LoggingMarkers.INVOKER_NERD_CMD(cmd.last),
-      s"running ${cmd.mkString(" ")} (timeout: $timeout)",
-      logLevel = InfoLevel)
-    executeProcess(cmd, timeout).andThen {
-      case Success(_) => transid.finished(this, start, logLevel = InfoLevel)
-      case Failure(t) => transid.failed(this, start, t.getMessage, ErrorLevel)
-    }
-  }
-
-  protected def createNerdCmd(args: String): Seq[String] = {
-    shCmd ++ Seq(s"nerdctl -n k8s.io $args")
-  }
 }
 object KubernetesClient {
 
@@ -683,7 +685,7 @@ protected[core] final case class TypedLogLine(time: Instant, stream: String, log
 
 protected[core] object TypedLogLine {
 
-  import KubernetesClient.{parseK8STimestamp, K8STimestampFormat}
+  import KubernetesClient.{K8STimestampFormat, parseK8STimestamp}
 
   def readInstant(json: JsValue): Instant = json match {
     case JsString(str) =>

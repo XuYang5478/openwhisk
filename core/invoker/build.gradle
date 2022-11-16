@@ -35,6 +35,8 @@ ext.coverageDirs = [
 distDockerCoverage.dependsOn ':common:scala:scoverageClasses', 'scoverageClasses'
 
 dependencies {
+    implementation 'org.apache.httpcomponents:httpcore:4.4.14'
+    implementation 'org.apache.httpcomponents:httpclient:4.5.13'
     implementation "org.scala-lang:scala-library:${gradle.scala.version}"
     implementation project(':common:scala')
     implementation project(':core:scheduler')

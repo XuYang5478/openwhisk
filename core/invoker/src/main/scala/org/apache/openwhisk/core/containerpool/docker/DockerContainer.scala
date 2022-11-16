@@ -32,6 +32,7 @@ import org.apache.openwhisk.core.entity.size._
 import org.apache.openwhisk.core.entity.{ActivationEntityLimit, ByteSize}
 import org.apache.openwhisk.http.Messages
 import spray.json._
+import DefaultJsonProtocol._
 
 import java.time.Instant
 import java.util.concurrent.TimeoutException
@@ -163,7 +164,8 @@ object DockerContainer {
           Future.failed(WhiskContainerStartupError(Messages.resourceProvisionError))
       }
     } yield {
-      log.info(this, s"创建容器：$id, $ip")
+      val info = Map("Id" -> id.toString, "ip"-> ip.asString(), "ActionName" -> actionName)
+      log.info(this, s"创建容器：${info.toJson.compactPrint}")
       new DockerContainer(id, imageToUse, actionName, ip, useRunc)
     }
   }
