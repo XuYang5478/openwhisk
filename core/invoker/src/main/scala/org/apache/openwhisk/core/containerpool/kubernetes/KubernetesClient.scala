@@ -256,7 +256,10 @@ class KubernetesClient(
       return Future.successful(())
     }
 
-    val containerId = container.nativeContainerId
+    var containerId = container.nativeContainerId
+    if (containerId.contains("containerd://")) {
+      containerId = containerId.replace("containerd://", "")
+    }
     val newName = getStatefulImageName(imageName, actionName)
     val containerHost = container.workerIP
 
@@ -269,7 +272,12 @@ class KubernetesClient(
   }
 
   def rm(container: KubernetesContainer)(implicit transid: TransactionId): Future[Unit] = {
-    val data = Map("Id" -> container.nativeContainerId, "ActionName" -> container.actionRunningName)
+    var nativeId = container.nativeContainerId
+    if (nativeId.contains("containerd://")) {
+      nativeId = nativeId.replace("containerd://", "")
+    }
+
+    val data = Map("Id" -> nativeId, "ActionName" -> container.actionRunningName)
     val result = ServerClient.postRequest(s"http://${container.workerIP}:8000/container/stop", data)
     log.info(this, s"停止容器 ${container.id.asString}，gossip 服务关闭状态：$result")
     deleteByName(container.id.asString)
@@ -374,7 +382,11 @@ class KubernetesClient(
     // By convention, kubernetes adds a docker:// prefix when using docker as the low-level container engine
     val nativeContainerId = pod.getStatus.getContainerStatuses.get(0).getContainerID.stripPrefix("docker://")
 
-    val data = Map("Id" -> nativeContainerId, "ActionName" -> actionName)
+    var nativeId = nativeContainerId
+    if(nativeId.contains("containerd://")){
+      nativeId=nativeId.replace("containerd://", "")
+    }
+    val data = Map("Id" -> nativeId, "ActionName" -> actionName)
     val result = ServerClient.postRequest(s"http://$workerIP:8000/container/start", data)
     log.info(this, s"创建容器 id=$id, workerIP=$workerIP, gossip 服务状态：$result")
 

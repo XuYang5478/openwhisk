@@ -415,7 +415,7 @@ class ContainerProxy(factory: (TransactionId,
       val newData = data.withoutResumeRun()
       //if there are items in runbuffer, process them if there is capacity, and stay; otherwise if we have any pending activations, also stay
       logging.info(this, s"动作${newData.action.name}执行完成，在容器${newData.container.containerId}中")
-      commitContainer(newData)
+//      commitContainer(newData)
       if (requestWork(data) || activeCount > 0) {
         stay using newData
       } else {
@@ -467,7 +467,7 @@ class ContainerProxy(factory: (TransactionId,
         case ActivationUnsuccessfulError(r) => Some(r.response)
         case _                              => None
       }
-      destroyContainer(data, true, true, r)
+      destroyContainer(data, true, true, abortResponse = r)
 
     // Failed for a subsequent /run
     // - container will be destroyed
@@ -565,7 +565,7 @@ class ContainerProxy(factory: (TransactionId,
       val newData = data.withoutResumeRun()
       //if there are items in runbuffer, process them if there is capacity, and stay; otherwise if we have any pending activations, also stay
       if (activeCount == 0) {
-        destroyContainer(newData, true)
+        destroyContainer(newData, true, false, true)
       } else {
         stay using newData
       }
@@ -652,13 +652,6 @@ class ContainerProxy(factory: (TransactionId,
     stay
   }
 
-  /*
-   * Commit a run stop container to a new image to maintain the status
-   */
-  def commitContainer(newData: WarmedData) = {
-    newData.container.commit()(TransactionId.invokerNanny)
-  }
-
   /**
    * Destroys the container after unpausing it if needed. Can be used
    * as a state progression as it goes to Removing.
@@ -668,8 +661,13 @@ class ContainerProxy(factory: (TransactionId,
   def destroyContainer(newData: ContainerStarted,
                        replacePrewarm: Boolean,
                        abort: Boolean = false,
+                       runCompleted: Boolean = false,
                        abortResponse: Option[ActivationResponse] = None) = {
     val container = newData.container
+    // 成功运行完后销毁容器前可以将正确状态 commit 进镜像中
+    if(runCompleted)
+      container.commit()(TransactionId.invokerNanny)
+
     if (!rescheduleJob) {
       context.parent ! ContainerRemoved(replacePrewarm)
     } else {
