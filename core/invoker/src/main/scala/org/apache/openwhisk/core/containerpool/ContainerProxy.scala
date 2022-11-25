@@ -371,7 +371,9 @@ class ContainerProxy(factory: (TransactionId,
         .pipeTo(self)
       goto(Running) using PreWarmedData(data.container, data.kind, data.memoryLimit, 1, data.expires)
 
-    case Event(Remove, data: PreWarmedData) => destroyContainer(data, false)
+    case Event(Remove, data: PreWarmedData) =>
+      logging.info(this, s"Started 阶段准备删除容器 ${data.container}")
+      destroyContainer(data, false)
 
     // prewarm container failed
     case Event(_: FailureMessage, data: PreWarmedData) =>
@@ -415,7 +417,7 @@ class ContainerProxy(factory: (TransactionId,
       val newData = data.withoutResumeRun()
       //if there are items in runbuffer, process them if there is capacity, and stay; otherwise if we have any pending activations, also stay
       logging.info(this, s"动作${newData.action.name}执行完成，在容器${newData.container.containerId}中")
-//      commitContainer(newData)
+      commitContainer(newData)
       if (requestWork(data) || activeCount > 0) {
         stay using newData
       } else {
@@ -515,7 +517,9 @@ class ContainerProxy(factory: (TransactionId,
       data.container.suspend()(TransactionId.invokerNanny).map(_ => ContainerPaused).pipeTo(self)
       goto(Pausing)
 
-    case Event(Remove, data: WarmedData) => destroyContainer(data, true)
+    case Event(Remove, data: WarmedData) =>
+      logging.info(this, s"Ready 阶段准备删除容器 ${data.container}")
+      destroyContainer(data, true)
 
     // warm container failed
     case Event(_: FailureMessage, data: WarmedData) =>
@@ -550,6 +554,7 @@ class ContainerProxy(factory: (TransactionId,
 
     // container is reclaimed by the pool or it has become too old
     case Event(StateTimeout | Remove, data: WarmedData) =>
+      logging.info(this, s"Paused 阶段准备删除容器 ${data.container}，动作为：${data.container.actionRunningName}")
       rescheduleJob = true // to suppress sending message to the pool and not double count
       destroyContainer(data, true)
   }
@@ -565,6 +570,7 @@ class ContainerProxy(factory: (TransactionId,
       val newData = data.withoutResumeRun()
       //if there are items in runbuffer, process them if there is capacity, and stay; otherwise if we have any pending activations, also stay
       if (activeCount == 0) {
+        logging.info(this, s"Removing after RunCompleted 阶段准备删除容器 ${data.container}")
         destroyContainer(newData, true, false, true)
       } else {
         stay using newData
@@ -652,6 +658,10 @@ class ContainerProxy(factory: (TransactionId,
     stay
   }
 
+
+  def commitContainer(newData: WarmedData) = {
+    newData.container.commit()(TransactionId.invokerNanny)
+  }
   /**
    * Destroys the container after unpausing it if needed. Can be used
    * as a state progression as it goes to Removing.
