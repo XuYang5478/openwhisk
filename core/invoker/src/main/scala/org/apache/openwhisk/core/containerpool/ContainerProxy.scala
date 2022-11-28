@@ -417,7 +417,7 @@ class ContainerProxy(factory: (TransactionId,
       val newData = data.withoutResumeRun()
       //if there are items in runbuffer, process them if there is capacity, and stay; otherwise if we have any pending activations, also stay
       logging.info(this, s"动作${newData.action.name}执行完成，在容器${newData.container.containerId}中")
-      commitContainer(newData)
+//      commitContainer(newData)
       if (requestWork(data) || activeCount > 0) {
         stay using newData
       } else {
@@ -556,7 +556,7 @@ class ContainerProxy(factory: (TransactionId,
     case Event(StateTimeout | Remove, data: WarmedData) =>
       logging.info(this, s"Paused 阶段准备删除容器 ${data.container}，动作为：${data.container.actionRunningName}")
       rescheduleJob = true // to suppress sending message to the pool and not double count
-      destroyContainer(data, true)
+      destroyContainer(data, true, runCompleted = true)
   }
 
   when(Removing) {
@@ -675,6 +675,7 @@ class ContainerProxy(factory: (TransactionId,
                        abortResponse: Option[ActivationResponse] = None) = {
     val container = newData.container
     // 成功运行完后销毁容器前可以将正确状态 commit 进镜像中
+    logging.info(this, s"动作执行完成：$runCompleted, 容器：$container, 动作：${container.actionRunningName}")
     if(runCompleted)
       container.commit()(TransactionId.invokerNanny)
 
